@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="ja" xml:lang="ja">
+  <head profile="http://purl.org/net/ns/metaprof">
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <title>07</title>
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"></script>
+    <script src="../dom-diff.js"></script>
+    <script>
+    $(function(){
+      $('#msg-toggle').click(function(){
+        $('#msg').toggle();
+      });
+    });
+    </script>
+  </head>
+  <body>
+    <h1>07</h1>
+    <div>
+      <img id="img" src="https://brobible.files.wordpress.com/2017/06/kelly-rohrbach.jpg?quality=90" width="300" />
+    <div>
+    <div>
+      <button id="msg-toggle">click me</button>
+      <div id="msg" style="display:none">
+        <ul>
+          <li>one</li>
+          <li>two</li>
+        </ul>
+      </div>
+    </div>
+    <script>
+    var js = `
+      $('ul > li:eq(0)').after('<li>new</li>');
+    `;
+    var css = "";
+    </script>
+  </body>
+</html>
+

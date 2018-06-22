@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="ja" xml:lang="ja">
+  <head profile="http://purl.org/net/ns/metaprof">
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <title>02</title>
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"></script>
+    <script src="../dom-diff.js"></script>
+  </head>
+<body>
+    <h1>wee</h1><p>hello</p>
+    <div>
+      <img id="img" src="https://codeorigin.jquery.com/jquery-wp-content/themes/jquery/images/logo-jquery@2x.png" width="400">
+    </div>
+    <div>
+      <ul>
+        <li>one</li><li>new</li>
+        <li>two</li>
+      </ul>
+    </div>
+    <script>
+    var js = `
+      $('h1').text('wee');
+      $('h1').after('<p>hello</p>');
+      $('#img').attr('src','https://codeorigin.jquery.com/jquery-wp-content/themes/jquery/images/logo-jquery@2x.png');
+      $('ul > li:eq(0)').after('<li>new</li>');
+    `;
+    var css = "";
+    </script>
+  
+
+
+</body>
+</html>
+
