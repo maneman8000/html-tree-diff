@@ -4,32 +4,78 @@ const TYPE_ELEMENT = "el";
 const TYPE_TEXT = "txt";
 
 class Node {
-  constructor(tagName, path, attributes = []) {
+  constructor(num, tagName, path, attributes = []) {
+    this.num = num;
     this.type = TYPE_ELEMENT;
     this.tagName = tagName;
-    this.path = path;
+    this.path = [[], []];
+    this.path[num] = path;
     this.attributes = attributes;
   }
 
   eq(node2) {
     if (this.type != node2.type) return false;
     return this.tagName === node2.tagName
-      && this.path.join('>') === node2.path.join('>')
       && JSON.stringify(this.attributes) === JSON.stringify(node2.attributes);
+  }
+
+  getPath(num) {
+    return this.path[num || this.num];
   }
 }
 
 class Text {
-  constructor(text, path) {
+  constructor(num, text, path) {
+    this.num = num;
     this.type = TYPE_TEXT;
     this.text = text;
-    this.path = path;
+    this.path = [[], []];
+    this.path[num] = path;
   }
 
   eq(text2) {
     if (this.type != text2.type) return false;
-    return this.path.join('>') === text2.path.join('>')
-      && this.text === text2.text;
+    return this.text === text2.text;
+  }
+
+  getPath(num) {
+    return this.path[num || this.num];
+  }
+}
+
+class Nodes extends Array {
+  eq(nodes2) {
+    if (this.length !== nodes2.length) return false;
+    return this.every((n1, i) => n1.eq(nodes2[i]));
+  }
+
+  add(num ,node, path) {
+    if (node.tagName) {
+      this.push(new Node (
+        num,
+        node.tagName.toLowerCase(),
+        path,
+        convertAttributes(node.attributes)
+      ));
+    }
+    else if (node.textContent || node.text) {
+      this.push(new Text(
+        num,
+        node.textContent || node.text,
+        path
+      ));
+    }
+  }
+
+  merge(nodes2) {
+    if (this.length !== nodes2.length) {
+      throw "can't merge different length nodes";
+    }
+    this.forEach((n, i) => {
+      const num = n.num === 0 ? 1 : 0;
+      n.path[num] = nodes2[i].getPath();
+    });
+    return this;
   }
 }
 
@@ -47,31 +93,31 @@ class DiffTree {
   }
 
   add(diff, nodeOrText) {
-    const parent1 = this.pathLastMatch(this.root1, nodeOrText.path);
-    const parent2 = this.pathLastMatch(this.root2, nodeOrText.path);
+    const parent1 = this.pathLastMatch(this.root1, nodeOrText.getPath(0));
+    const parent2 = this.pathLastMatch(this.root2, nodeOrText.getPath(1));
     if (diff === 0) {
       if (!parent1 || !parent2) {
-        throw "can't find: " + nodeOrText;
+        throw "can't find1: " + JSON.stringify(nodeOrText);
       }
       this.appendToNode(parent1, nodeOrText);
       this.appendToNode(parent2, nodeOrText);
     }
     else if (diff === 1) {
       if (!parent2) {
-        throw "can't find: " + nodeOrText;
+        throw "can't find2: " + JSON.stringify(nodeOrText);
       }
       const n = this.appendToNode(parent2, nodeOrText);
       n.diffs.insert = 1;
     }
     else if (diff === -1) {
       if (!parent1) {
-        throw "can't find: " + nodeOrText;
+        throw "can't find3: " + JSON.stringify(nodeOrText);
       }
       const n = this.appendToNode(parent1, nodeOrText);
       n.diffs.remove = 1;
       // tree2 の削除された箇所をさかのぼって特定する (遡る必要ないかも?)
       let p2 = parent2;
-      let path = nodeOrText.path.slice(0, nodeOrText.path.length - 1);
+      let path = nodeOrText.getPath(1).slice(0, nodeOrText.path.length - 1);
       while (!p2 && path.length > 0) {
         p2 = this.pathLastMatch(this.root2, path);
         path = path.slice(0, path.length - 1);
@@ -266,7 +312,6 @@ const walk = (node, context, i, cb) => {
 };
 
 // 順番に復元していくことでツリー構造を戻せるはずなのでインデックスは不要
-// かつあえてインデックスないほうが diff の精度あがる (?)
 const path = (context) => {
   return context.map((cx) => {
     return cx.node.tagName.toLowerCase();
@@ -288,24 +333,12 @@ const convertAttributes = (attributes) => {
   }
 };
 
-const treeToNodes = (body) => {
-  const res = [];
+const treeToNodes = (body, num) => {
+  const nodes = new Nodes();
   walk(body, [], 0, (node, context) => {
-    if (node.tagName) {
-      res.push(new Node (
-        node.tagName.toLowerCase(),
-        path(context),
-        convertAttributes(node.attributes)
-      ));
-    }
-    else if (node.textContent || node.text) {
-      res.push(new Text(
-        node.textContent || node.text,
-        path(context)
-      ));
-    }
+    nodes.add(num, node, path(context));
   });
-  return res;
+  return nodes;
 };
 
 const nodeEq = (node1, node2) => {
@@ -320,13 +353,14 @@ const composeTreeDiff = (diffs) => {
   diffs.forEach((diff) => {
     diff[1].forEach(nt => tree.add(diff[0], nt));
   });
-  tree.fixDiffs();
+//  tree.fixDiffs();
+//  console.log(tree.dump());
   return tree;
 };
 
 const diffTree = (tree1, tree2) => {
-  const seq1 = treeToNodes(tree1);
-  const seq2 = treeToNodes(tree2);
+  const seq1 = treeToNodes(tree1, 0);
+  const seq2 = treeToNodes(tree2, 1);
   const diffs = diff(seq1, seq2, nodeEq);
   // dump diffs
 //  diffs.forEach((diff) => {

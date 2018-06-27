@@ -7,47 +7,45 @@ const DIFF_DELETE = -1;
 const DIFF_INSERT = 1;
 const DIFF_EQUAL = 0;
 
-const diff_main = (nodes1, nodes2, eq) => {
+const diff_main = (nodes1, nodes2) => {
   // console.log("diff_main:", nodes1, nodes2);
-  const seqEq = (s1, s2) => {
-    if (s1.length !== s2.length) return false;
-    return s1.every((n1, i) => n1.eq(s2[i]));
-  };
 
   // Check for equality (speedup).
-  if (seqEq(nodes1, nodes2)) {
+  if (nodes1.eq(nodes2)) {
     if (nodes1) {
-      return [[DIFF_EQUAL, nodes1]];
+      return [[DIFF_EQUAL, nodes1.merge(nodes2)]];
     }
     return [];
   }
 
   // Trim off common prefix (speedup).
-  const commonlength1 = diff_commonPrefix(nodes1, nodes2, seqEq);
-  const commonprefix = nodes1.slice(0, commonlength1);
+  const commonlength1 = diff_commonPrefix(nodes1, nodes2);
+  const commonprefix1 = nodes1.slice(0, commonlength1);
+  const commonprefix2 = nodes2.slice(0, commonlength1);
   nodes1 = nodes1.slice(commonlength1);
   nodes2 = nodes2.slice(commonlength1);
 
   // Trim off common suffix (speedup).
-  const commonlength2 = diff_commonSuffix(nodes1, nodes2, seqEq);
-  const commonsuffix = nodes1.slice(nodes1.length - commonlength2);
+  const commonlength2 = diff_commonSuffix(nodes1, nodes2);
+  const commonsuffix1 = nodes1.slice(nodes1.length - commonlength2);
+  const commonsuffix2 = nodes2.slice(nodes2.length - commonlength2);
   nodes1 = nodes1.slice(0, nodes1.length - commonlength2);
   nodes2 = nodes2.slice(0, nodes2.length - commonlength2);
 
   // Compute the diff on the middle block.
-  const diffs = diff_compute_(nodes1, nodes2, eq);
+  const diffs = diff_compute_(nodes1, nodes2);
 
   // Restore the prefix and suffix.
-  if (commonprefix) {
-    diffs.unshift([DIFF_EQUAL, commonprefix]);
+  if (commonprefix1) {
+    diffs.unshift([DIFF_EQUAL, commonprefix1.merge(commonprefix2)]);
   }
-  if (commonsuffix) {
-    diffs.push([DIFF_EQUAL, commonsuffix]);
+  if (commonsuffix1) {
+    diffs.push([DIFF_EQUAL, commonsuffix1.merge(commonsuffix2)]);
   }
   return diffs;
 };
 
-const diff_compute_ = (nodes1, nodes2, eq) => {
+const diff_compute_ = (nodes1, nodes2) => {
   if (!nodes1 || nodes1.length === 0) {
     // Just add some text (speedup).
     return [[DIFF_INSERT, nodes2]];
@@ -61,10 +59,8 @@ const diff_compute_ = (nodes1, nodes2, eq) => {
   const longtext = nodes1.length > nodes2.length ? nodes1 : nodes2;
   const shorttext = nodes1.length > nodes2.length ? nodes2 : nodes1;
   const i = longtext.findIndex((n, i, array) => {
-    for (let j = 0; j < shorttext.length; j++) {
-      if (!eq(array[i + j], shorttext[j])) return false;
-    }
-    return true;
+    if (longtext.length - i < shorttext.length) return false;
+    return shorttext.every((n, j) => n.eq(longtext[i + j]));
   });
   if (i != -1) {
     let method = DIFF_INSERT;
@@ -77,11 +73,10 @@ const diff_compute_ = (nodes1, nodes2, eq) => {
     if (i > 0) {
       diffs.push([method, longtext.slice(0, i)]);
     }
-    diffs.push([DIFF_EQUAL, shorttext]);
+    diffs.push([DIFF_EQUAL, shorttext.merge(longtext.slice(i, shorttext.length + i))]);
     if (i + shorttext.length < longtext.length) {
       diffs.push([method, longtext.slice(i + shorttext.length)]);
     }
-    // console.log("add diffs:", diffs);
     return diffs;
   }
 
@@ -92,10 +87,10 @@ const diff_compute_ = (nodes1, nodes2, eq) => {
             [DIFF_INSERT, nodes2]];
   }
 
-  return diff_bisect_(nodes1, nodes2, eq);
+  return diff_bisect_(nodes1, nodes2);
 };
 
-const diff_bisect_ = (nodes1, nodes2, eq) => {
+const diff_bisect_ = (nodes1, nodes2) => {
   // Cache the text lengths to prevent multiple calls.
   const nodes1_length = nodes1.length;
   const nodes2_length = nodes2.length;
@@ -134,7 +129,7 @@ const diff_bisect_ = (nodes1, nodes2, eq) => {
       }
       let y1 = x1 - k1;
       while (x1 < nodes1_length && y1 < nodes2_length &&
-             eq(nodes1[x1], nodes2[y1])) {
+             nodes1[x1].eq(nodes2[y1])) {
         x1++;
         y1++;
       }
@@ -152,7 +147,7 @@ const diff_bisect_ = (nodes1, nodes2, eq) => {
           const x2 = nodes1_length - v2[k2_offset];
           if (x1 >= x2) {
             // Overlap detected.
-            return diff_bisectSplit_(nodes1, nodes2, x1, y1, eq);
+            return diff_bisectSplit_(nodes1, nodes2, x1, y1);
           }
         }
       }
@@ -169,9 +164,7 @@ const diff_bisect_ = (nodes1, nodes2, eq) => {
       }
       let y2 = x2 - k2;
       while (x2 < nodes1_length && y2 < nodes2_length &&
-             eq(nodes1[nodes1_length - x2 - 1],
-               nodes2[nodes2_length - y2 - 1])
-            ) {
+             nodes1[nodes1_length - x2 - 1].eq(nodes2[nodes2_length - y2 - 1])) {
         x2++;
         y2++;
       }
@@ -191,7 +184,7 @@ const diff_bisect_ = (nodes1, nodes2, eq) => {
           x2 = nodes1_length - x2;
           if (x1 >= x2) {
             // Overlap detected.
-            return diff_bisectSplit_(nodes1, nodes2, x1, y1, eq);
+            return diff_bisectSplit_(nodes1, nodes2, x1, y1);
           }
         }
       }
@@ -202,7 +195,7 @@ const diff_bisect_ = (nodes1, nodes2, eq) => {
   return [[DIFF_DELETE, nodes1], [DIFF_INSERT, nodes2]];
 };
 
-const diff_bisectSplit_ = (nodes1, nodes2, x, y, eq) => {
+const diff_bisectSplit_ = (nodes1, nodes2, x, y) => {
   const nodes1a = nodes1.slice(0, x);
   const nodes2a = nodes2.slice(0, y);
   const nodes1b = nodes1.slice(x);
@@ -211,16 +204,16 @@ const diff_bisectSplit_ = (nodes1, nodes2, x, y, eq) => {
 //  console.log('bi-sec: ', nodes1a, nodes2a, nodes1b, nodes2b);
 
   // Compute both diffs serially.
-  const diffs = diff_main(nodes1a, nodes2a, eq);
-  const diffsb = diff_main(nodes1b, nodes2b, eq);
+  const diffs = diff_main(nodes1a, nodes2a);
+  const diffsb = diff_main(nodes1b, nodes2b);
 
   return diffs.concat(diffsb);
 };
 
-const diff_commonPrefix = (nodes1, nodes2, seqEq) => {
+const diff_commonPrefix = (nodes1, nodes2) => {
   // Quick check for common null cases.
   if (!nodes1 || nodes1.length === 0 || !nodes2 || nodes2.length === 0 ||
-      !seqEq(nodes1.slice(0, 1), nodes2.slice(0, 1))) {
+      !nodes1[0].eq(nodes2[0])) {
     return 0;
   }
   // Binary search.
@@ -230,8 +223,7 @@ const diff_commonPrefix = (nodes1, nodes2, seqEq) => {
   let pointermid = pointermax;
   let pointerstart = 0;
   while (pointermin < pointermid) {
-    if (seqEq(nodes1.slice(pointerstart, pointermid),
-              nodes2.slice(pointerstart, pointermid))) {
+    if (nodes1.slice(pointerstart, pointermid).eq(nodes2.slice(pointerstart, pointermid))) {
       pointermin = pointermid;
       pointerstart = pointermin;
     } else {
@@ -242,10 +234,10 @@ const diff_commonPrefix = (nodes1, nodes2, seqEq) => {
   return pointermid;
 };
 
-const diff_commonSuffix = (nodes1, nodes2, seqEq) => {
+const diff_commonSuffix = (nodes1, nodes2) => {
   // Quick check for common null cases.
   if (!nodes1 || nodes1.length === 0 || !nodes2 || nodes2.length === 0 ||
-      !seqEq(nodes1.slice(nodes1.length - 1), nodes2.slice(nodes2.length - 1))) {
+      !nodes1[nodes1.length - 1].eq(nodes2[nodes2.length - 1])) {
     return 0;
   }
   // Binary search.
@@ -255,8 +247,8 @@ const diff_commonSuffix = (nodes1, nodes2, seqEq) => {
   let pointermid = pointermax;
   let pointerend = 0;
   while (pointermin < pointermid) {
-    if (seqEq(nodes1.slice(nodes1.length - pointermid, nodes1.length - pointerend),
-              nodes2.slice(nodes2.length - pointermid, nodes2.length - pointerend))) {
+    if (nodes1.slice(nodes1.length - pointermid, nodes1.length - pointerend).eq(
+        nodes2.slice(nodes2.length - pointermid, nodes2.length - pointerend))) {
       pointermin = pointermid;
       pointerend = pointermin;
     } else {
