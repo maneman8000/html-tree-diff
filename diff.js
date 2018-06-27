@@ -7,16 +7,47 @@ const DIFF_DELETE = -1;
 const DIFF_INSERT = 1;
 const DIFF_EQUAL = 0;
 
-module.exports = diff_main = (nodes1, nodes2, eq) => {
+const diff_main = (nodes1, nodes2, eq) => {
   // console.log("diff_main:", nodes1, nodes2);
+  const seqEq = (s1, s2) => {
+    if (s1.length !== s2.length) return false;
+    return s1.every((n1, i) => n1.eq(s2[i]));
+  };
+
   // Check for equality (speedup).
-  if (nodes1 == nodes2) {
+  if (seqEq(nodes1, nodes2)) {
     if (nodes1) {
       return [[DIFF_EQUAL, nodes1]];
     }
     return [];
   }
 
+  // Trim off common prefix (speedup).
+  const commonlength1 = diff_commonPrefix(nodes1, nodes2, seqEq);
+  const commonprefix = nodes1.slice(0, commonlength1);
+  nodes1 = nodes1.slice(commonlength1);
+  nodes2 = nodes2.slice(commonlength1);
+
+  // Trim off common suffix (speedup).
+  const commonlength2 = diff_commonSuffix(nodes1, nodes2, seqEq);
+  const commonsuffix = nodes1.slice(nodes1.length - commonlength2);
+  nodes1 = nodes1.slice(0, nodes1.length - commonlength2);
+  nodes2 = nodes2.slice(0, nodes2.length - commonlength2);
+
+  // Compute the diff on the middle block.
+  const diffs = diff_compute_(nodes1, nodes2, eq);
+
+  // Restore the prefix and suffix.
+  if (commonprefix) {
+    diffs.unshift([DIFF_EQUAL, commonprefix]);
+  }
+  if (commonsuffix) {
+    diffs.push([DIFF_EQUAL, commonsuffix]);
+  }
+  return diffs;
+};
+
+const diff_compute_ = (nodes1, nodes2, eq) => {
   if (!nodes1 || nodes1.length === 0) {
     // Just add some text (speedup).
     return [[DIFF_INSERT, nodes2]];
@@ -54,7 +85,13 @@ module.exports = diff_main = (nodes1, nodes2, eq) => {
     return diffs;
   }
 
-  // Compute the diff on the middle block.
+  if (shorttext.length == 1) {
+    // Single character string.
+    // After the previous speedup, the character can't be an equality.
+    return [[DIFF_DELETE, nodes1],
+            [DIFF_INSERT, nodes2]];
+  }
+
   return diff_bisect_(nodes1, nodes2, eq);
 };
 
@@ -179,3 +216,55 @@ const diff_bisectSplit_ = (nodes1, nodes2, x, y, eq) => {
 
   return diffs.concat(diffsb);
 };
+
+const diff_commonPrefix = (nodes1, nodes2, seqEq) => {
+  // Quick check for common null cases.
+  if (!nodes1 || nodes1.length === 0 || !nodes2 || nodes2.length === 0 ||
+      !seqEq(nodes1.slice(0, 1), nodes2.slice(0, 1))) {
+    return 0;
+  }
+  // Binary search.
+  // Performance analysis: https://neil.fraser.name/news/2007/10/09/
+  let pointermin = 0;
+  let pointermax = Math.min(nodes1.length, nodes2.length);
+  let pointermid = pointermax;
+  let pointerstart = 0;
+  while (pointermin < pointermid) {
+    if (seqEq(nodes1.slice(pointerstart, pointermid),
+              nodes2.slice(pointerstart, pointermid))) {
+      pointermin = pointermid;
+      pointerstart = pointermin;
+    } else {
+      pointermax = pointermid;
+    }
+    pointermid = Math.floor((pointermax - pointermin) / 2 + pointermin);
+  }
+  return pointermid;
+};
+
+const diff_commonSuffix = (nodes1, nodes2, seqEq) => {
+  // Quick check for common null cases.
+  if (!nodes1 || nodes1.length === 0 || !nodes2 || nodes2.length === 0 ||
+      !seqEq(nodes1.slice(nodes1.length - 1), nodes2.slice(nodes2.length - 1))) {
+    return 0;
+  }
+  // Binary search.
+  // Performance analysis: https://neil.fraser.name/news/2007/10/09/
+  let pointermin = 0;
+  let pointermax = Math.min(nodes1.length, nodes2.length);
+  let pointermid = pointermax;
+  let pointerend = 0;
+  while (pointermin < pointermid) {
+    if (seqEq(nodes1.slice(nodes1.length - pointermid, nodes1.length - pointerend),
+              nodes2.slice(nodes2.length - pointermid, nodes2.length - pointerend))) {
+      pointermin = pointermid;
+      pointerend = pointermin;
+    } else {
+      pointermax = pointermid;
+    }
+    pointermid = Math.floor((pointermax - pointermin) / 2 + pointermin);
+  }
+  return pointermid;
+};
+
+module.exports = diff_main;

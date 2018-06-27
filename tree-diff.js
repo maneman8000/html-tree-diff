@@ -74,7 +74,7 @@ class DiffTree {
       let path = nodeOrText.path.slice(0, nodeOrText.path.length - 1);
       while (!p2 && path.length > 0) {
         p2 = this.pathLastMatch(this.root2, path);
-        path = path.sclice(0, path.length - 1);
+        path = path.slice(0, path.length - 1);
       }
       if (!p2) {
         console.warn("WARNING!: can't locate removed path: ", nodeOrText);
@@ -173,7 +173,7 @@ const getSelector = (node) => {
   while (n.parent) {
     const l = n.parent.children.filter(c => c.tagName && c.tagName === n.tagName).length;
     if (l > 1) {
-      const i = n.parent.children.findIndex(c => c === n);
+      const i = n.parent.children.filter(c => c.tagName).findIndex(c => c === n);
       sel.push({ n: n.tagName, i: i+1 });
     }
     else {
@@ -269,7 +269,7 @@ const walk = (node, context, i, cb) => {
 // かつあえてインデックスないほうが diff の精度あがる (?)
 const path = (context) => {
   return context.map((cx) => {
-    return cx.node.tagName;
+    return cx.node.tagName.toLowerCase();
   });
 };
 
@@ -298,7 +298,7 @@ const treeToNodes = (body) => {
         convertAttributes(node.attributes)
       ));
     }
-    else {
+    else if (node.textContent || node.text) {
       res.push(new Text(
         node.textContent || node.text,
         path(context)
