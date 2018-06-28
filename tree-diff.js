@@ -115,9 +115,9 @@ class DiffTree {
       }
       const n = this.appendToNode(parent1, nodeOrText);
       n.diffs.remove = 1;
-      // tree2 の削除された箇所をさかのぼって特定する (遡る必要ないかも?)
-      let p2 = parent2;
-      let path = nodeOrText.getPath(1).slice(0, nodeOrText.path.length - 1);
+      // tree2 の削除された箇所をさかのぼって特定する
+      let p2 = this.pathLastMatch(this.root2, nodeOrText.getPath(0));
+      let path = nodeOrText.getPath(0).slice(0, nodeOrText.path.length - 1);
       while (!p2 && path.length > 0) {
         p2 = this.pathLastMatch(this.root2, path);
         path = path.slice(0, path.length - 1);
@@ -125,22 +125,24 @@ class DiffTree {
       if (!p2) {
         console.warn("WARNING!: can't locate removed path: ", nodeOrText);
       }
-      p2.removedNodes.push(n);
+      this.appendToNode(p2, nodeOrText, true);
     }
   }
 
-  appendToNode(node, nodeOrText) {
+  appendToNode(node, nodeOrText, removed = false) {
     if (nodeOrText.type === TYPE_ELEMENT) {
       node.children.push(new TreeNode(
         nodeOrText.tagName,
         node,
-        nodeOrText.attributes
+        nodeOrText.attributes,
+        removed
       ));
     }
     else {
       node.children.push(new TreeText(
         nodeOrText.text,
-        node
+        node,
+        removed
       ));
     }
     return node.children[node.children.length - 1];
@@ -150,12 +152,13 @@ class DiffTree {
     let current = root;
     for (let j = 0; j < path.length; j++) {
       const p = path[j];
-      const len = current.children.length;
+      const ch = current.children.filter(c => !c.removed);
+      const len = ch.length;
       if (len === 0) {
         return null;
       }
       for (let i = len - 1; i >= 0; i--) {
-        const c = current.children[i];
+        const c = ch[i];
         if (c.tagName === p) {
           current = c;
           break;
@@ -168,22 +171,62 @@ class DiffTree {
     return current;
   }
 
-  fixDiffs() {
-    this.walk(this.root2, (nodeOrText) => {
-      if (nodeOrText.type === TYPE_ELEMENT && nodeOrText.removedNodes.length > 0) {
-        let removed = true;
-        nodeOrText.removedNodes.forEach((rn) => {
-          nodeOrText.children.forEach((n) => {
-            if (n.diffs.insert && n.match(rn)) {
-              n.changed(rn);
-              removed = false;
-              return; // break
+  siblingsIncludeRemoved(node, cb) {
+    if (node.children.findIndex(n => n.removed) >= 0) {
+      cb(node.children);
+    }
+    node.children.forEach((c) => {
+      if (c.type === TYPE_ELEMENT) {
+        this.siblingsIncludeRemoved(c, cb);
+      }
+    });
+  }
+
+  resolveChanges() {
+    this.siblingsIncludeRemoved(this.root2, (siblings) => {
+      const len = siblings.length;
+      for (let i = 0; i < len; i++) {
+        const n = siblings[i];
+        if (n.removed) {
+          // find removed chunk
+          let j = i + 1;
+          while (j < len && siblings[j].removed) {
+            j += 1;
+          }
+          // find inserted chunk
+          const insertedNodes = [];
+          let k = j;
+          while (k < len && siblings[k].isInsert()) {
+            insertedNodes.push(siblings[k]);
+            k += 1;
+          }
+          k = i - 1;
+          while (k >= 0 && siblings[k].isInsert()) {
+            insertedNodes.push(siblings[k]);
+            k -= 1;
+          }
+          if (insertedNodes.length > 0) {
+            for (let ii = i; ii < j; ii++) {
+              const removed = siblings[ii];
+              insertedNodes.forEach((ni) => {
+                if (removed.match(ni)) {
+                  removed.changed = true;
+                  delete ni.diffs.insert;
+                  ni.diffs.change = 1;
+                }
+              });
             }
-          });
-        });
-        if (removed) {
-          nodeOrText.diffs.remove = 1;
+          }
+          i = j - 1;
         }
+      }
+    });
+  }
+
+  resolveRemoves() {
+    this.walk(this.root2, (n) => {
+      if (n.removed && !n.changed) {
+        n.parent.diffs.remove = 1;
       }
     });
   }
@@ -191,17 +234,13 @@ class DiffTree {
   diffs() {
     const ret = [];
     this.walk(this.root2, (n) => {
-      if (Object.keys(n.diffs).length > 0) {
-        const sel = n.selector();
-        for (let type in n.diffs) {
-          if (n.type === TYPE_ELEMENT) {
-            ret.push({ type: type, selector: sel });
-          }
-          else {
-            ret.push({ type: type + '-string', selector: sel });
-          }
+      const sel = n.selector();
+      const diffs = n.getDiffs();
+      diffs.forEach((diff) => {
+        if (!diff.match(/removed/)) {
+          ret.push({ type: diff, selector: sel });
         }
-      }
+      });
     });
     return ret;
   }
@@ -217,9 +256,9 @@ const getSelector = (node) => {
   let sel = [];
   let n = node;
   while (n.parent) {
-    const l = n.parent.children.filter(c => c.tagName && c.tagName === n.tagName).length;
+    const l = n.parent.children.filter(c => c.tagName && c.tagName === n.tagName && !c.removed).length;
     if (l > 1) {
-      const i = n.parent.children.filter(c => c.tagName).findIndex(c => c === n);
+      const i = n.parent.children.filter(c => c.tagName && !c.removed).findIndex(c => c === n);
       sel.push({ n: n.tagName, i: i+1 });
     }
     else {
@@ -238,26 +277,30 @@ const getSelector = (node) => {
 };
 
 class TreeNode {
-  constructor(tagName, parent = null, attributes = {}) {
+  constructor(tagName, parent = null, attributes = {}, removed = false) {
     this.type = TYPE_ELEMENT;
     this.tagName = tagName;
     this.parent = parent;
     this.attributes = attributes;
     this.children = [];
     this.diffs = {};
-    this.removedNodes = [];
+    this.removed = removed;
   }
 
   match(n2) {
     return this.type === n2.type && this.tagName === n2.tagName;
   }
 
-  changed(n2) {
-    this.diffs.property = 1;
+  isInsert() {
+    return !!this.diffs.insert;
   }
 
-  diff() {
-    return Object.keys(this.diffs).join("|");
+  getDiffs() {
+    if (this.removed) return ["removed"];
+    if (this.diffs.change) {
+      return ["property"];
+    }
+    return Object.keys(this.diffs);
   }
 
   selector() {
@@ -265,30 +308,31 @@ class TreeNode {
   }
 
   dump(indent = '') {
-    return indent + '{' + [this.tagName, this.diff(), JSON.stringify(this.attributes)].join(', ') + "}\n"
+    return indent + '{' + [this.tagName, this.getDiffs().join('|'), JSON.stringify(this.attributes)].join(', ') + "}\n"
       + this.children.map(c => c.dump(indent + '  ')).join('');
   }
 }
 
 class TreeText {
-  constructor(text, parent = null) {
+  constructor(text, parent = null, removed = false) {
     this.type = TYPE_TEXT;
     this.text = text;
     this.parent = parent;
     this.diffs = {};
+    this.removed = removed;
   }
 
   match(n2) {
     return this.type === n2.type;
   }
 
-  changed(n2) {
-    // TODO: ここでさらに詳細な text diff を取れる
-    this.diffs['changed'] = 1;
+  isInsert() {
+    return !!this.diffs.insert;
   }
 
-  diff() {
-    return Object.keys(this.diffs).join("|");
+  getDiffs() {
+    if (this.removed) return ["removed-string"];
+    return Object.keys(this.diffs).map(d => d + '-string');
   }
 
   selector() {
@@ -296,7 +340,7 @@ class TreeText {
   }
 
   dump(indent = '') {
-    return indent + '[TEXT] (' + this.diff() + ') ' + this.text + "\n";
+    return indent + '[TEXT] (' + this.getDiffs().join('|') + ') ' + this.text + "\n";
   }
 }
 
@@ -353,8 +397,9 @@ const composeTreeDiff = (diffs) => {
   diffs.forEach((diff) => {
     diff[1].forEach(nt => tree.add(diff[0], nt));
   });
-//  tree.fixDiffs();
-//  console.log(tree.dump());
+  tree.resolveChanges();
+  tree.resolveRemoves();
+  // console.log(tree.dump());
   return tree;
 };
 
