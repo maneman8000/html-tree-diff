@@ -235,10 +235,11 @@ class DiffTree {
     const ret = [];
     this.walk(this.root2, (n) => {
       const sel = n.selector();
+      const ani = n.ancestorInserted();
       const diffs = n.getDiffs();
       diffs.forEach((diff) => {
         if (!diff.match(/removed/)) {
-          ret.push({ type: diff, selector: sel });
+          ret.push({ type: diff, selector: sel, ancestorInserted: ani });
         }
       });
     });
@@ -276,6 +277,16 @@ const getSelector = (node) => {
   }).reverse().join(' > ');
 };
 
+const getAncestorInserted = (node) => {
+  let p = node.parent;
+  while(p) {
+    const diffs = Object.keys(p.diffs);
+    if (diffs.findIndex((d) => d.match(/insert/)) >= 0) return true;
+    p = p.parent;
+  }
+  return false;
+};
+
 class TreeNode {
   constructor(tagName, parent = null, attributes = {}, removed = false) {
     this.type = TYPE_ELEMENT;
@@ -305,6 +316,10 @@ class TreeNode {
 
   selector() {
     return getSelector(this);
+  }
+
+  ancestorInserted() {
+    return getAncestorInserted(this);
   }
 
   dump(indent = '') {
@@ -337,6 +352,10 @@ class TreeText {
 
   selector() {
     return getSelector(this.parent);
+  }
+
+  ancestorInserted() {
+    return getAncestorInserted(this);
   }
 
   dump(indent = '') {
@@ -385,12 +404,6 @@ const treeToNodes = (body, num) => {
   return nodes;
 };
 
-const nodeEq = (node1, node2) => {
-  // undefined, undefined => false
-  if (!node1 || !node2) return false;
-  return node1.eq(node2);
-};
-
 const composeTreeDiff = (diffs) => {
   const ret = [];
   const tree = new DiffTree();
@@ -403,10 +416,8 @@ const composeTreeDiff = (diffs) => {
   return tree;
 };
 
-const diffTree = (tree1, tree2) => {
-  const seq1 = treeToNodes(tree1, 0);
-  const seq2 = treeToNodes(tree2, 1);
-  const diffs = diff(seq1, seq2, nodeEq);
+const diffTree = (seq1, seq2) => {
+  const diffs = diff(seq1, seq2);
   // dump diffs
 //  diffs.forEach((diff) => {
 //    console.log(JSON.stringify(diff));
@@ -415,4 +426,5 @@ const diffTree = (tree1, tree2) => {
   return tree.diffs();
 };
 
-module.exports = diffTree;
+module.exports.treeToNodes = treeToNodes;
+module.exports.diffTree = diffTree;
