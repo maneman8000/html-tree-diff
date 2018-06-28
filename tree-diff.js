@@ -43,10 +43,42 @@ class Text {
   }
 }
 
-class Nodes extends Array {
+class Nodes {
+  constructor(d = []) {
+    this.data = d;
+  }
+
+  length() {
+    return this.data.length;
+  }
+
+  at(i) {
+    return this.data[i];
+  }
+
+  push(n) {
+    this.data.push(n);
+  }
+
+  forEach(cb) {
+    this.data.forEach(cb);
+  }
+
+  slice(n1, n2) {
+    return new Nodes(this.data.slice(n1, n2));
+  }
+
+  findIndex(cb) {
+    return this.data.findIndex(cb);
+  }
+
+  every(cb) {
+    return this.data.every(cb);
+  }
+
   eq(nodes2) {
-    if (this.length !== nodes2.length) return false;
-    return this.every((n1, i) => n1.eq(nodes2[i]));
+    if (this.length() !== nodes2.length()) return false;
+    return this.every((n1, i) => n1.eq(nodes2.at(i)));
   }
 
   add(num ,node, path) {
@@ -68,12 +100,12 @@ class Nodes extends Array {
   }
 
   merge(nodes2) {
-    if (this.length !== nodes2.length) {
+    if (this.length() !== nodes2.length()) {
       throw "can't merge different length nodes";
     }
     this.forEach((n, i) => {
       const num = n.num === 0 ? 1 : 0;
-      n.path[num] = nodes2[i].getPath();
+      n.path[num] = nodes2.at(i).getPath();
     });
     return this;
   }
@@ -258,12 +290,13 @@ const getSelector = (node) => {
   let n = node;
   while (n.parent) {
     const l = n.parent.children.filter(c => c.tagName && c.tagName === n.tagName && !c.removed).length;
+    const tn = n.tagName.replace(':', '\\:');
     if (l > 1) {
       const i = n.parent.children.filter(c => c.tagName && !c.removed).findIndex(c => c === n);
-      sel.push({ n: n.tagName, i: i+1 });
+      sel.push({ n: tn, i: i+1 });
     }
     else {
-      sel.push({ n: n.tagName });
+      sel.push({ n: tn });
     }
     n = n.parent;
   }
@@ -280,8 +313,7 @@ const getSelector = (node) => {
 const getAncestorInserted = (node) => {
   let p = node.parent;
   while(p) {
-    const diffs = Object.keys(p.diffs);
-    if (diffs.findIndex((d) => d.match(/insert/)) >= 0) return true;
+    if (p.isInsert()) return true;
     p = p.parent;
   }
   return false;
