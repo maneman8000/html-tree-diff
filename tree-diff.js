@@ -266,7 +266,8 @@ class DiffTree {
 
   resolveMoves() {
     this.walk(this.root2, (n) => {
-      if (n.link && n.selector(true) !== n.link.selector(true)) {
+      if (n.link && (n.selector(true) !== n.link.selector(true) ||
+                     getAncestorInserted(n))) {
         n.diffs.move = 1;
       }
     });
