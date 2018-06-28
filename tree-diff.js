@@ -131,8 +131,9 @@ class DiffTree {
       if (!parent1 || !parent2) {
         throw "can't find1: " + JSON.stringify(nodeOrText);
       }
-      this.appendToNode(parent1, nodeOrText);
-      this.appendToNode(parent2, nodeOrText);
+      const n1 = this.appendToNode(parent1, nodeOrText);
+      const n2 = this.appendToNode(parent2, nodeOrText);
+      n2.link = n1;
     }
     else if (diff === 1) {
       if (!parent2) {
@@ -263,6 +264,14 @@ class DiffTree {
     });
   }
 
+  resolveMoves() {
+    this.walk(this.root2, (n) => {
+      if (n.link && n.selector(true) !== n.link.selector(true)) {
+        n.diffs.move = 1;
+      }
+    });
+  }
+
   diffs() {
     const ret = [];
     this.walk(this.root2, (n) => {
@@ -285,7 +294,7 @@ class DiffTree {
   }
 }
 
-const getSelector = (node) => {
+const getSelector = (node, noIndex = false) => {
   let sel = [];
   let n = node;
   while (n.parent) {
@@ -301,7 +310,7 @@ const getSelector = (node) => {
     n = n.parent;
   }
   return sel.map((s) => {
-    if (s.i) {
+    if (!noIndex && s.i) {
       return s.n + ':nth-child(' + s.i + ')';
     }
     else {
@@ -346,8 +355,8 @@ class TreeNode {
     return Object.keys(this.diffs);
   }
 
-  selector() {
-    return getSelector(this);
+  selector(noIndex = false) {
+    return getSelector(this, noIndex);
   }
 
   ancestorInserted() {
@@ -382,8 +391,8 @@ class TreeText {
     return Object.keys(this.diffs).map(d => d + '-string');
   }
 
-  selector() {
-    return getSelector(this.parent);
+  selector(noIndex = false) {
+    return getSelector(this.parent, noIndex);
   }
 
   ancestorInserted() {
@@ -444,6 +453,7 @@ const composeTreeDiff = (diffs) => {
   });
   tree.resolveChanges();
   tree.resolveRemoves();
+  tree.resolveMoves();
   // console.log(tree.dump());
   return tree;
 };
