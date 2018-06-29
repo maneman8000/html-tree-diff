@@ -243,9 +243,11 @@ class DiffTree {
               const removed = siblings[ii];
               insertedNodes.forEach((ni) => {
                 if (removed.match(ni)) {
-                  removed.changed = true;
+                  removed.detecedtNotRemoved = true;
                   delete ni.diffs.insert;
-                  ni.diffs.change = 1;
+                  if (!removed.eq(ni)) {
+                    ni.diffs.change = 1;
+                  }
                 }
               });
             }
@@ -258,7 +260,7 @@ class DiffTree {
 
   resolveRemoves() {
     this.walk(this.root2, (n) => {
-      if (n.removed && !n.changed) {
+      if (n.removed && !n.detecedtNotRemoved) {
         n.parent.diffs.remove = 1;
       }
     });
@@ -266,7 +268,7 @@ class DiffTree {
 
   resolveMoves() {
     this.walk(this.root2, (n) => {
-      if (n.link && (n.selector(true) !== n.link.selector(true) ||
+      if (n.link && (n.selector({ withoutInsert: true }) !== n.link.selector({ withoutInsert: true }) ||
                      getAncestorInserted(n))) {
         n.diffs.move = 1;
       }
@@ -295,14 +297,20 @@ class DiffTree {
   }
 }
 
-const getSelector = (node, noIndex = false) => {
+const getSelector = (node, opt = {}) => {
   let sel = [];
   let n = node;
   while (n.parent) {
-    const l = n.parent.children.filter(c => c.tagName && c.tagName === n.tagName && !c.removed).length;
+    const l = n.parent.children.filter((c) => {
+      return c.tagName && c.tagName === n.tagName && !c.removed &&
+        (opt.withoutInsert ? !c.isInsert() : true);
+    }).length;
     const tn = n.tagName.replace(':', '\\:');
     if (l > 1) {
-      const i = n.parent.children.filter(c => c.tagName && !c.removed).findIndex(c => c === n);
+      const i = n.parent.children.filter((c) => {
+        return c.tagName && !c.removed &&
+          (opt.withoutInsert ? !c.isInsert() : true);
+      }).findIndex(c => c === n);
       sel.push({ n: tn, i: i+1 });
     }
     else {
@@ -311,7 +319,7 @@ const getSelector = (node, noIndex = false) => {
     n = n.parent;
   }
   return sel.map((s) => {
-    if (!noIndex && s.i) {
+    if (s.i) {
       return s.n + ':nth-child(' + s.i + ')';
     }
     else {
@@ -340,6 +348,10 @@ class TreeNode {
     this.removed = removed;
   }
 
+  eq(n2) {
+    return this.match(n2) && JSON.stringify(this.attributes) === JSON.stringify(n2.attributes);
+  }
+
   match(n2) {
     return this.type === n2.type && this.tagName === n2.tagName;
   }
@@ -356,8 +368,8 @@ class TreeNode {
     return Object.keys(this.diffs);
   }
 
-  selector(noIndex = false) {
-    return getSelector(this, noIndex);
+  selector(opt = {}) {
+    return getSelector(this, opt);
   }
 
   ancestorInserted() {
@@ -379,6 +391,10 @@ class TreeText {
     this.removed = removed;
   }
 
+  eq(n2) {
+    return this.match(n2) && this.text === n2.text;
+  }
+
   match(n2) {
     return this.type === n2.type;
   }
@@ -392,8 +408,8 @@ class TreeText {
     return Object.keys(this.diffs).map(d => d + '-string');
   }
 
-  selector(noIndex = false) {
-    return getSelector(this.parent, noIndex);
+  selector(opt = {}) {
+    return getSelector(this.parent, opt);
   }
 
   ancestorInserted() {
