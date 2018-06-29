@@ -20,8 +20,8 @@ const doFile = async () => {
     const tree1 = parse(minify(text1, minifyOpt)).querySelector('body');
     const text2 = await readFile(files[1], 'utf-8');
     const tree2 = parse(minify(text2, minifyOpt)).querySelector('body');
-    const diffs = diffTree(treeToNodes(tree1, 0), treeToNodes(tree2, 1));
-    console.log(diffs);
+    const tree = diffTree(treeToNodes(tree1, 0), treeToNodes(tree2, 1));
+    console.log(tree.diffs());
   }
   catch (err) {
     console.log(err);

@@ -471,7 +471,6 @@ const composeTreeDiff = (diffs) => {
   tree.resolveChanges();
   tree.resolveRemoves();
   tree.resolveMoves();
-  // console.log(tree.dump());
   return tree;
 };
 
@@ -481,8 +480,7 @@ const diffTree = (seq1, seq2) => {
 //  diffs.forEach((diff) => {
 //    console.log(JSON.stringify(diff));
 //  });
-  const tree = composeTreeDiff(diffs);
-  return tree.diffs();
+  return composeTreeDiff(diffs);
 };
 
 module.exports.treeToNodes = treeToNodes;
