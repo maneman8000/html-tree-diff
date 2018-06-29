@@ -117,10 +117,15 @@ class DiffTree {
     this.root2 = new TreeNode('html');
   }
 
-  walk(node, cb) {
+  walk(node, opt, cb) {
+    if (typeof opt === "function") {
+      cb = opt;
+      opt = {};
+    }
+    if (!opt.all && node.removed) return;
     cb(node);
     if (node.type === TYPE_ELEMENT) {
-      node.children.forEach(c => this.walk(c, cb));
+      node.children.forEach(c => this.walk(c, opt, cb));
     }
   }
 
@@ -259,7 +264,7 @@ class DiffTree {
   }
 
   resolveRemoves() {
-    this.walk(this.root2, (n) => {
+    this.walk(this.root2, { all: true }, (n) => {
       if (n.removed && !n.detecedtNotRemoved) {
         n.parent.diffs.remove = 1;
       }
@@ -282,9 +287,7 @@ class DiffTree {
       const ani = n.ancestorInserted();
       const diffs = n.getDiffs();
       diffs.forEach((diff) => {
-        if (!diff.match(/removed/)) {
-          ret.push({ type: diff, selector: sel, ancestorInserted: ani });
-        }
+        ret.push({ type: diff, selector: sel, ancestorInserted: ani });
       });
     });
     return ret;
