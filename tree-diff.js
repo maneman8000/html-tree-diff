@@ -430,7 +430,10 @@ const walk = (node, context, i, cb) => {
     const cx = context.concat({ node: node, i: i });
     const len = node.childNodes.length;
     for (let i = 0; i < len; i++) {
-      walk(node.childNodes[i], cx, i, cb);
+      const n = node.childNodes[i];
+      if (n.nodeType === 1 || n.nodeType === 3) {
+        walk(n, cx, i, cb);
+      }
     }
   }
 };
