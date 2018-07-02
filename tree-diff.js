@@ -91,11 +91,14 @@ class Nodes {
       ));
     }
     else if (node.textContent || node.text) {
-      this.push(new Text(
+      const t = new Text(
         num,
         node.textContent || node.text,
         path
-      ));
+      );
+      if (!t.text.match(/^\s*$/)) {
+        this.push(t);
+      }
     }
   }
 
