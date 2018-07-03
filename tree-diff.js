@@ -157,10 +157,10 @@ class DiffTree {
       const n = this.appendToNode(parent1, nodeOrText);
       n.diffs.remove = 1;
       // tree2 の削除された箇所をさかのぼって特定する
-      let p2 = this.pathLastMatch(this.root2, nodeOrText.getPath(0));
+      let p2 = this.pathLastMatch(this.root2, nodeOrText.getPath(0), { withRemoved: true });
       let path = nodeOrText.getPath(0).slice(0, nodeOrText.path.length - 1);
       while (!p2 && path.length > 0) {
-        p2 = this.pathLastMatch(this.root2, path);
+        p2 = this.pathLastMatch(this.root2, path, { withRemoved: true });
         path = path.slice(0, path.length - 1);
       }
       if (!p2) {
@@ -189,11 +189,17 @@ class DiffTree {
     return node.children[node.children.length - 1];
   }
 
-  pathLastMatch(root, path) {
+  pathLastMatch(root, path, opt = {}) {
     let current = root;
     for (let j = 0; j < path.length; j++) {
       const p = path[j];
-      const ch = current.children.filter(c => !c.removed);
+      let ch;
+      if (opt.withRemoved) {
+        ch = current.children;
+      }
+      else {
+        ch = current.children.filter(c => !c.removed);
+      }
       const len = ch.length;
       if (len === 0) {
         return null;
@@ -276,7 +282,7 @@ class DiffTree {
 
   resolveMoves() {
     this.walk(this.root2, (n) => {
-      if (n.link && (n.selector({ withoutInsert: true }) !== n.link.selector({ withoutInsert: true }) ||
+      if (n.link && (n.selector({ withoutInsert: true, withRemoved: true }) !== n.link.selector({ withoutInsert: true, withRemoved: true }) ||
                      getAncestorInserted(n))) {
         n.diffs.move = 1;
       }
@@ -308,13 +314,15 @@ const getSelector = (node, opt = {}) => {
   let n = node;
   while (n.parent) {
     const l = n.parent.children.filter((c) => {
-      return c.tagName && c.tagName === n.tagName && !c.removed &&
+      return c.tagName && c.tagName === n.tagName &&
+        (c.detecedtNotRemoved ? false : (opt.withRemoved ? true : !c.removed) ) &&
         (opt.withoutInsert ? !c.isInsert() : true);
     }).length;
     const tn = n.tagName.replace(':', '\\:');
     if (l > 1) {
       const i = n.parent.children.filter((c) => {
-        return c.tagName && !c.removed &&
+        return c.tagName &&
+          (c.detecedtNotRemoved ? false : (opt.withRemoved ? true : !c.removed) ) &&
           (opt.withoutInsert ? !c.isInsert() : true);
       }).findIndex(c => c === n);
       sel.push({ n: tn, i: i+1 });
@@ -367,6 +375,7 @@ class TreeNode {
   }
 
   getDiffs() {
+    if (this.removed && this.detecedtNotRemoved) return ["removed-no"];
     if (this.removed) return ["removed"];
     if (this.diffs.change) {
       return ["property"];
@@ -410,6 +419,7 @@ class TreeText {
   }
 
   getDiffs() {
+    if (this.removed && this.detecedtNotRemoved) return ["removed-string-no"];
     if (this.removed) return ["removed-string"];
     return Object.keys(this.diffs).map(d => d + '-string');
   }
