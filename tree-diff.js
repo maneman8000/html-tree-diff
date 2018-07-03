@@ -2,6 +2,7 @@ const diff = require("./diff");
 
 const TYPE_ELEMENT = "el";
 const TYPE_TEXT = "txt";
+const TYPE_END = "end";
 
 class Node {
   constructor(num, tagName, path, attributes = []) {
@@ -43,6 +44,20 @@ class Text {
   }
 }
 
+class NodeEnd {
+  constructor() {
+    this.type = TYPE_END;
+  }
+
+  eq(node2) {
+    return this.type === node2.type;
+  }
+
+  getPath(num) {
+    return [];
+  }
+}
+
 class Nodes {
   constructor(d = []) {
     this.data = d;
@@ -81,7 +96,22 @@ class Nodes {
     return this.every((n1, i) => n1.eq(nodes2.at(i)));
   }
 
+  addEnds(path) {
+    if (this.data.length === 0) return;
+    const path0 = this.data[this.data.length - 1].getPath();
+    let changed = false;
+    for (let i = 0; i < path0.length; i++) {
+      if (!path[i] || path[i] !== path0[i]) {
+        changed = true;
+      }
+      if (changed) {
+        this.push(new NodeEnd());
+      }
+    }
+  }
+
   add(num ,node, path) {
+    // this.addEnds(path);
     if (node.tagName) {
       this.push(new Node (
         num,
@@ -107,8 +137,10 @@ class Nodes {
       throw "can't merge different length nodes";
     }
     this.forEach((n, i) => {
-      const num = n.num === 0 ? 1 : 0;
-      n.path[num] = nodes2.at(i).getPath();
+      if (n.type !== TYPE_END) {
+        const num = n.num === 0 ? 1 : 0;
+        n.path[num] = nodes2.at(i).getPath();
+      }
     });
     return this;
   }
@@ -133,6 +165,7 @@ class DiffTree {
   }
 
   add(diff, nodeOrText) {
+    if (nodeOrText.type === TYPE_END) return;
     const parent1 = this.pathLastMatch(this.root1, nodeOrText.getPath(0));
     const parent2 = this.pathLastMatch(this.root2, nodeOrText.getPath(1));
     if (diff === 0) {
