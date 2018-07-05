@@ -14,10 +14,11 @@ class Node {
     this.attributes = attributes;
   }
 
-  eq(node2) {
+  eq(node2, exactly = false) {
     if (this.type != node2.type) return false;
     return this.tagName === node2.tagName
-      && JSON.stringify(this.attributes) === JSON.stringify(node2.attributes);
+      && JSON.stringify(this.attributes) === JSON.stringify(node2.attributes)
+      && (!exactly || JSON.stringify(this.getPath()) === JSON.stringify(node2.getPath()));
   }
 
   getPath(num) {
@@ -34,9 +35,10 @@ class Text {
     this.path[num] = path;
   }
 
-  eq(text2) {
+  eq(text2, exactly = false) {
     if (this.type != text2.type) return false;
-    return this.text === text2.text;
+    return this.text === text2.text
+      && (!exactly || JSON.stringify(this.getPath()) === JSON.stringify(text2.getPath()));
   }
 
   getPath(num) {
@@ -91,9 +93,18 @@ class Nodes {
     return this.data.every(cb);
   }
 
-  eq(nodes2) {
+  concat(n) {
+    return new Nodes(this.data.concat(n.data));
+  }
+
+  append(n) {
+    this.data = this.data.concat(n.data);
+    return this;
+  }
+
+  eq(nodes2, exactly = false) {
     if (this.length() !== nodes2.length()) return false;
-    return this.every((n1, i) => n1.eq(nodes2.at(i)));
+    return this.every((n1, i) => n1.eq(nodes2.at(i), exactly));
   }
 
   addEnds(path) {
@@ -527,7 +538,7 @@ const composeTreeDiff = (diffs) => {
 };
 
 const diffTree = (seq1, seq2) => {
-  const diffs = diff(seq1, seq2);
+  const diffs = diff(seq1, seq2, Nodes);
   // dump diffs
 //  diffs.forEach((diff) => {
 //    console.log(JSON.stringify(diff));
