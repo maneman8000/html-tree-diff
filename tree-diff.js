@@ -22,7 +22,7 @@ class Node {
   }
 
   getPath(num) {
-    return this.path[num || this.num];
+    return this.path[(typeof num === "number" ? num : this.num)];
   }
 }
 
@@ -42,7 +42,7 @@ class Text {
   }
 
   getPath(num) {
-    return this.path[num || this.num];
+    return this.path[(typeof num === "number" ? num : this.num)];
   }
 }
 
@@ -327,7 +327,7 @@ class DiffTree {
   resolveMoves() {
     this.walk(this.root2, (n) => {
       if (n.link && (n.selector({ withoutInsert: true, withRemoved: true }) !== n.link.selector({ withoutInsert: true, withRemoved: true }) ||
-                     getAncestorInserted(n))) {
+                     !!findAncestor(n, (n) => n.isInsert()))) {
         n.diffs.move = 1;
       }
     });
@@ -337,10 +337,11 @@ class DiffTree {
     const ret = [];
     this.walk(this.root2, (n) => {
       const sel = n.selector();
-      const ani = n.ancestorInserted();
+      const ani = !!findAncestor(n, (n) => n.isInsert());
+      const anm = !!findAncestor(n, (n) => n.isMove());
       const diffs = n.getDiffs();
       diffs.forEach((diff) => {
-        ret.push({ type: diff, selector: sel, ancestorInserted: ani });
+        ret.push({ type: diff, selector: sel, ancestorInserted: ani, ancestorMoved: anm });
       });
     });
     return ret;
@@ -386,13 +387,13 @@ const getSelector = (node, opt = {}) => {
   }).reverse().join(' > ');
 };
 
-const getAncestorInserted = (node) => {
+const findAncestor = (node, cb) => {
   let p = node.parent;
   while(p) {
-    if (p.isInsert()) return true;
+    if (cb(p)) return p;
     p = p.parent;
   }
-  return false;
+  return null;
 };
 
 class TreeNode {
@@ -418,6 +419,10 @@ class TreeNode {
     return !!this.diffs.insert;
   }
 
+  isMove() {
+    return !!this.diffs.move;
+  }
+
   getDiffs() {
     if (this.removed && this.detecedtNotRemoved) return ["removed-no"];
     if (this.removed) return ["removed"];
@@ -429,10 +434,6 @@ class TreeNode {
 
   selector(opt = {}) {
     return getSelector(this, opt);
-  }
-
-  ancestorInserted() {
-    return getAncestorInserted(this);
   }
 
   dump(indent = '') {
@@ -462,6 +463,10 @@ class TreeText {
     return !!this.diffs.insert;
   }
 
+  isMove() {
+    return !!this.diffs.move;
+  }
+
   getDiffs() {
     if (this.removed && this.detecedtNotRemoved) return ["removed-string-no"];
     if (this.removed) return ["removed-string"];
@@ -470,10 +475,6 @@ class TreeText {
 
   selector(opt = {}) {
     return getSelector(this.parent, opt);
-  }
-
-  ancestorInserted() {
-    return getAncestorInserted(this);
   }
 
   dump(indent = '') {
