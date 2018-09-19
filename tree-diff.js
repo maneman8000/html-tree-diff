@@ -297,7 +297,16 @@ class DiffTree {
             k -= 1;
           }
           if (insertedNodes.length > 0) {
-            for (let ii = i; ii < j; ii++) {
+            let ii_s, ii_e;
+            if (k > j) {
+              ii_s = j - insertedNodes.length;
+              ii_e = j;
+            }
+            else {
+              ii_s = i;
+              ii_e = i + insertedNodes.length;
+            }
+            for (let ii = ii_s; ii < ii_e; ii++) {
               const removed = siblings[ii];
               insertedNodes.forEach((ni) => {
                 if (removed.match(ni)) {
