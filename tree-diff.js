@@ -335,9 +335,11 @@ class DiffTree {
 
   resolveMoves() {
     this.walk(this.root2, (n) => {
-      if (n.link && (n.selector({ withoutInsert: true, withRemoved: true }) !== n.link.selector({ withoutInsert: true, withRemoved: true }) ||
+      if (n.link && (n.selector({ withoutInsert: true, withRemoved: true, withoutMove: true })
+                     !== n.link.selector({ withoutInsert: true, withRemoved: true, withoutMove: true }) ||
                      !!findAncestor(n, (n) => n.isInsert()))) {
         n.diffs.move = 1;
+        n.link.move = 1;
       }
     });
   }
@@ -370,14 +372,16 @@ const getSelector = (node, opt = {}) => {
     const l = n.parent.children.filter((c) => {
       return c.tagName && c.tagName === n.tagName &&
         (c.detecedtNotRemoved ? false : (opt.withRemoved ? true : !c.removed) ) &&
-        (opt.withoutInsert ? !c.isInsert() : true);
+        (opt.withoutInsert ? !c.isInsert() : true) &&
+        (opt.withoutMove ? !c.diffs.move : true);
     }).length;
     const tn = n.tagName.replace(':', '\\:');
     if (l > 1) {
       const i = n.parent.children.filter((c) => {
         return c.tagName &&
           (c.detecedtNotRemoved ? false : (opt.withRemoved ? true : !c.removed) ) &&
-          (opt.withoutInsert ? !c.isInsert() : true);
+          (opt.withoutInsert ? !c.isInsert() : true) &&
+          (opt.withoutMove ? !c.diffs.move : true);
       }).findIndex(c => c === n);
       sel.push({ n: tn, i: i+1 });
     }
